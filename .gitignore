@@ -1,0 +1,36 @@
+# deps
+node_modules/
+.pnp
+.pnp.*
+.yarn/
+
+# testing
+/coverage
+
+# apps
+/.next/
+/out/
+/build
+/dist/
+/.turbo
+
+# logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# env
+.env
+.env.*
+!.env.example
+
+# misc
+.DS_Store
+*.pem
+*.tsbuildinfo
+
+# IDEs
+.vscode/
+.idea/

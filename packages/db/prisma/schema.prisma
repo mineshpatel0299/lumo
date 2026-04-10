@@ -1,0 +1,593 @@
+// packages/db/prisma/schema.prisma
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+enum WorkspacePlan {
+  free
+  pro
+  business
+  enterprise
+}
+
+enum MemberRole {
+  owner
+  admin
+  member
+  viewer
+}
+
+enum StatusCategory {
+  backlog
+  unstarted
+  started
+  completed
+  cancelled
+}
+
+enum IssuePriority {
+  urgent
+  high
+  medium
+  low
+  no_priority
+}
+
+enum SprintStatus {
+  planned
+  active
+  completed
+}
+
+enum IssueRelationType {
+  blocks
+  is_blocked_by
+  duplicates
+  is_duplicated_by
+  relates_to
+}
+
+enum ActivityEventType {
+  created
+  status_changed
+  assigned
+  priority_changed
+  title_changed
+  comment_added
+  attachment_added
+  sprint_changed
+  label_added
+  label_removed
+  estimate_changed
+  due_date_changed
+}
+
+enum NotificationType {
+  issue_assigned
+  issue_mentioned
+  issue_status_changed
+  comment_added
+  sprint_started
+  sprint_completed
+  invite_accepted
+}
+
+enum DigestFrequency {
+  daily
+  weekly
+  never
+}
+
+enum AnalyticsMetricType {
+  burndown
+  velocity
+  cumulative_flow
+  cycle_time
+  throughput
+}
+
+enum IntegrationProvider {
+  github
+  slack
+  figma
+}
+
+enum PrStatus {
+  open
+  closed
+  merged
+  draft
+}
+
+enum WebhookStatus {
+  pending
+  processed
+  failed
+}
+
+enum WebhookProvider {
+  clerk
+  github
+  slack
+}
+
+enum AiFeature {
+  subtask_generation
+  sprint_summary
+  priority_suggestion
+  issue_labeling
+  chat
+}
+
+model User {
+  id           String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  clerkId      String    @unique @map("clerk_id") @db.VarChar(255)
+  email        String    @unique @db.VarChar(255)
+  name         String    @db.VarChar(100)
+  avatarUrl    String?   @map("avatar_url")
+  timezone     String    @default("UTC") @db.VarChar(50)
+  lastActiveAt DateTime? @map("last_active_at")
+  createdAt    DateTime  @default(now()) @map("created_at")
+  updatedAt    DateTime  @updatedAt @map("updated_at")
+
+  workspaceMembers  WorkspaceMember[]
+  sentInvites       WorkspaceInvite[]
+  createdIssues     Issue[]                  @relation("IssueCreator")
+  assignedIssues    Issue[]                  @relation("IssueAssignee")
+  comments          Comment[]
+  activityLogs      ActivityLog[]
+  notifications     Notification[]
+  notificationPrefs NotificationPreference[]
+  watchedIssues     IssueWatcher[]
+  dashboardWidgets  DashboardWidget[]
+  aiInteractions    AiInteraction[]
+  apiKeys           ApiKey[]
+
+  @@map("users")
+}
+
+model Workspace {
+  id          String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  name        String        @db.VarChar(100)
+  slug        String        @unique @db.VarChar(50)
+  logoUrl     String?       @map("logo_url")
+  plan        WorkspacePlan @default(free)
+  memberLimit Int           @default(5) @map("member_limit")
+  settings    Json          @default("{}")
+  createdAt   DateTime      @default(now()) @map("created_at")
+  updatedAt   DateTime      @updatedAt @map("updated_at")
+
+  members            WorkspaceMember[]
+  invites            WorkspaceInvite[]
+  projects           Project[]
+  labels             Label[]
+  issues             Issue[]
+  notifications      Notification[]
+  notificationPrefs  NotificationPreference[]
+  analyticsSnapshots AnalyticsSnapshot[]
+  dashboardWidgets   DashboardWidget[]
+  integrations       Integration[]
+  webhookEvents      WebhookEvent[]
+  aiInteractions     AiInteraction[]
+  apiKeys            ApiKey[]
+
+  @@map("workspaces")
+}
+
+model WorkspaceMember {
+  id          String     @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  workspaceId String     @map("workspace_id") @db.Uuid
+  userId      String     @map("user_id") @db.Uuid
+  role        MemberRole @default(member)
+  joinedAt    DateTime   @default(now()) @map("joined_at")
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([workspaceId, userId])
+  @@map("workspace_members")
+}
+
+model WorkspaceInvite {
+  id          String     @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  workspaceId String     @map("workspace_id") @db.Uuid
+  invitedBy   String     @map("invited_by") @db.Uuid
+  email       String     @db.VarChar(255)
+  role        MemberRole @default(member)
+  token       String     @unique @db.VarChar(255)
+  expiresAt   DateTime   @map("expires_at")
+  accepted    Boolean    @default(false)
+  createdAt   DateTime   @default(now()) @map("created_at")
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  inviter   User      @relation(fields: [invitedBy], references: [id])
+
+  @@map("workspace_invites")
+}
+
+model Project {
+  id                 String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  workspaceId        String    @map("workspace_id") @db.Uuid
+  name               String    @db.VarChar(100)
+  slug               String    @db.VarChar(20)
+  description        String?
+  icon               String?   @db.VarChar(10)
+  color              String?   @db.VarChar(7)
+  status             String    @default("active")
+  defaultAssigneeId  String?   @map("default_assignee_id") @db.Uuid
+  customFieldsSchema Json      @default("[]") @map("custom_fields_schema")
+  archivedAt         DateTime? @map("archived_at")
+  createdAt          DateTime  @default(now()) @map("created_at")
+  updatedAt          DateTime  @updatedAt @map("updated_at")
+
+  workspace          Workspace           @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  statuses           ProjectStatus[]
+  labels             Label[]
+  sprints            Sprint[]
+  issues             Issue[]
+  analyticsSnapshots AnalyticsSnapshot[]
+
+  @@unique([workspaceId, slug])
+  @@map("projects")
+}
+
+model ProjectStatus {
+  id        String         @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  projectId String         @map("project_id") @db.Uuid
+  name      String         @db.VarChar(50)
+  color     String         @db.VarChar(7)
+  category  StatusCategory
+  position  Int
+  isDefault Boolean        @default(false) @map("is_default")
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  issues  Issue[]
+
+  @@map("project_statuses")
+}
+
+model Label {
+  id          String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  workspaceId String   @map("workspace_id") @db.Uuid
+  projectId   String?  @map("project_id") @db.Uuid
+  name        String   @db.VarChar(50)
+  color       String   @db.VarChar(7)
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  workspace   Workspace    @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  project     Project?     @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  issueLabels IssueLabel[]
+
+  @@map("labels")
+}
+
+model Sprint {
+  id          String       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  projectId   String       @map("project_id") @db.Uuid
+  name        String       @db.VarChar(100)
+  goal        String?
+  status      SprintStatus @default(planned)
+  startDate   DateTime?    @map("start_date") @db.Date
+  endDate     DateTime?    @map("end_date") @db.Date
+  completedAt DateTime?    @map("completed_at")
+  createdAt   DateTime     @default(now()) @map("created_at")
+
+  project            Project             @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  issues             Issue[]
+  analyticsSnapshots AnalyticsSnapshot[]
+
+  @@map("sprints")
+}
+
+model Issue {
+  id           String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  identifier   String        @unique @db.VarChar(20)
+  projectId    String        @map("project_id") @db.Uuid
+  workspaceId  String        @map("workspace_id") @db.Uuid
+  sprintId     String?       @map("sprint_id") @db.Uuid
+  parentId     String?       @map("parent_id") @db.Uuid
+  creatorId    String        @map("creator_id") @db.Uuid
+  assigneeId   String?       @map("assignee_id") @db.Uuid
+  statusId     String        @map("status_id") @db.Uuid
+  title        String        @db.VarChar(500)
+  description  Json?
+  priority     IssuePriority @default(no_priority)
+  estimate     Int?
+  sortOrder    Float         @default(0) @map("sort_order")
+  dueDate      DateTime?     @map("due_date") @db.Date
+  startedAt    DateTime?     @map("started_at")
+  completedAt  DateTime?     @map("completed_at")
+  cancelledAt  DateTime?     @map("cancelled_at")
+  customFields Json          @default("{}") @map("custom_fields")
+  createdAt    DateTime      @default(now()) @map("created_at")
+  updatedAt    DateTime      @updatedAt @map("updated_at")
+
+  project        Project         @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  workspace      Workspace       @relation(fields: [workspaceId], references: [id])
+  sprint         Sprint?         @relation(fields: [sprintId], references: [id])
+  parent         Issue?          @relation("SubTasks", fields: [parentId], references: [id])
+  subTasks       Issue[]         @relation("SubTasks")
+  creator        User            @relation("IssueCreator", fields: [creatorId], references: [id])
+  assignee       User?           @relation("IssueAssignee", fields: [assigneeId], references: [id])
+  status         ProjectStatus   @relation(fields: [statusId], references: [id])
+  labels         IssueLabel[]
+  relations      IssueRelation[] @relation("FromIssue")
+  relatedBy      IssueRelation[] @relation("ToIssue")
+  comments       Comment[]
+  activityLogs   ActivityLog[]
+  attachments    Attachment[]
+  watchers       IssueWatcher[]
+  prLinks        GithubPrLink[]
+  aiInteractions AiInteraction[]
+
+  @@map("issues")
+}
+
+model IssueLabel {
+  issueId String @map("issue_id") @db.Uuid
+  labelId String @map("label_id") @db.Uuid
+
+  issue Issue @relation(fields: [issueId], references: [id], onDelete: Cascade)
+  label Label @relation(fields: [labelId], references: [id], onDelete: Cascade)
+
+  @@id([issueId, labelId])
+  @@map("issue_labels")
+}
+
+model IssueRelation {
+  id          String            @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  fromIssueId String            @map("from_issue_id") @db.Uuid
+  toIssueId   String            @map("to_issue_id") @db.Uuid
+  type        IssueRelationType
+  createdAt   DateTime          @default(now()) @map("created_at")
+
+  fromIssue Issue @relation("FromIssue", fields: [fromIssueId], references: [id], onDelete: Cascade)
+  toIssue   Issue @relation("ToIssue", fields: [toIssueId], references: [id], onDelete: Cascade)
+
+  @@map("issue_relations")
+}
+
+model Comment {
+  id        String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  issueId   String    @map("issue_id") @db.Uuid
+  authorId  String    @map("author_id") @db.Uuid
+  parentId  String?   @map("parent_id") @db.Uuid
+  body      Json
+  edited    Boolean   @default(false)
+  editedAt  DateTime? @map("edited_at")
+  createdAt DateTime  @default(now()) @map("created_at")
+  updatedAt DateTime  @updatedAt @map("updated_at")
+
+  issue     Issue             @relation(fields: [issueId], references: [id], onDelete: Cascade)
+  author    User              @relation(fields: [authorId], references: [id])
+  parent    Comment?          @relation("CommentReplies", fields: [parentId], references: [id])
+  replies   Comment[]         @relation("CommentReplies")
+  reactions CommentReaction[]
+
+  @@map("comments")
+}
+
+model CommentReaction {
+  id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  commentId String   @map("comment_id") @db.Uuid
+  userId    String   @map("user_id") @db.Uuid
+  emoji     String   @db.VarChar(10)
+  createdAt DateTime @default(now()) @map("created_at")
+
+  comment Comment @relation(fields: [commentId], references: [id], onDelete: Cascade)
+
+  @@unique([commentId, userId, emoji])
+  @@map("comment_reactions")
+}
+
+model ActivityLog {
+  id        String            @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  issueId   String            @map("issue_id") @db.Uuid
+  actorId   String            @map("actor_id") @db.Uuid
+  eventType ActivityEventType @map("event_type")
+  fieldName String?           @map("field_name") @db.VarChar(50)
+  oldValue  Json?             @map("old_value")
+  newValue  Json?             @map("new_value")
+  createdAt DateTime          @default(now()) @map("created_at")
+
+  issue Issue @relation(fields: [issueId], references: [id], onDelete: Cascade)
+  actor User  @relation(fields: [actorId], references: [id])
+
+  @@map("activity_logs")
+}
+
+model Attachment {
+  id         String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  issueId    String   @map("issue_id") @db.Uuid
+  uploadedBy String   @map("uploaded_by") @db.Uuid
+  filename   String   @db.VarChar(255)
+  storageKey String   @map("storage_key") @db.VarChar(500)
+  mimeType   String   @map("mime_type") @db.VarChar(100)
+  sizeBytes  Int      @map("size_bytes")
+  url        String
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  issue Issue @relation(fields: [issueId], references: [id], onDelete: Cascade)
+
+  @@map("attachments")
+}
+
+model Notification {
+  id           String           @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  recipientId  String           @map("recipient_id") @db.Uuid
+  actorId      String           @map("actor_id") @db.Uuid
+  workspaceId  String           @map("workspace_id") @db.Uuid
+  type         NotificationType
+  resourceId   String           @map("resource_id") @db.Uuid
+  resourceType String           @map("resource_type") @db.VarChar(50)
+  data         Json             @default("{}")
+  read         Boolean          @default(false)
+  readAt       DateTime?        @map("read_at")
+  createdAt    DateTime         @default(now()) @map("created_at")
+
+  recipient User      @relation(fields: [recipientId], references: [id], onDelete: Cascade)
+  workspace Workspace @relation(fields: [workspaceId], references: [id])
+
+  @@map("notifications")
+}
+
+model NotificationPreference {
+  id                 String          @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId             String          @map("user_id") @db.Uuid
+  workspaceId        String          @map("workspace_id") @db.Uuid
+  issueAssigned      Boolean         @default(true) @map("issue_assigned")
+  issueMentioned     Boolean         @default(true) @map("issue_mentioned")
+  issueStatusChanged Boolean         @default(false) @map("issue_status_changed")
+  commentAdded       Boolean         @default(true) @map("comment_added")
+  sprintStarted      Boolean         @default(true) @map("sprint_started")
+  emailDigest        Boolean         @default(true) @map("email_digest")
+  digestFrequency    DigestFrequency @default(daily) @map("digest_frequency")
+
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, workspaceId])
+  @@map("notification_preferences")
+}
+
+model IssueWatcher {
+  issueId   String   @map("issue_id") @db.Uuid
+  userId    String   @map("user_id") @db.Uuid
+  createdAt DateTime @default(now()) @map("created_at")
+
+  issue Issue @relation(fields: [issueId], references: [id], onDelete: Cascade)
+  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([issueId, userId])
+  @@map("issue_watchers")
+}
+
+model AnalyticsSnapshot {
+  id           String              @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  projectId    String              @map("project_id") @db.Uuid
+  sprintId     String?             @map("sprint_id") @db.Uuid
+  snapshotDate DateTime            @map("snapshot_date") @db.Date
+  metricType   AnalyticsMetricType @map("metric_type")
+  data         Json
+  computedAt   DateTime            @default(now()) @map("computed_at")
+
+  project Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  sprint  Sprint?  @relation(fields: [sprintId], references: [id])
+
+  @@unique([projectId, sprintId, snapshotDate, metricType])
+  @@map("analytics_snapshots")
+}
+
+model DashboardWidget {
+  id          String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  workspaceId String   @map("workspace_id") @db.Uuid
+  userId      String   @map("user_id") @db.Uuid
+  widgetType  String   @map("widget_type") @db.VarChar(50)
+  gridX       Int      @map("grid_x")
+  gridY       Int      @map("grid_y")
+  gridW       Int      @map("grid_w")
+  gridH       Int      @map("grid_h")
+  config      Json     @default("{}")
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("dashboard_widgets")
+}
+
+model Integration {
+  id             String              @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  workspaceId    String              @map("workspace_id") @db.Uuid
+  provider       IntegrationProvider
+  accessToken    String              @map("access_token")
+  refreshToken   String?             @map("refresh_token")
+  externalId     String?             @map("external_id") @db.VarChar(255)
+  metadata       Json                @default("{}")
+  active         Boolean             @default(true)
+  tokenExpiresAt DateTime?           @map("token_expires_at")
+  createdAt      DateTime            @default(now()) @map("created_at")
+
+  workspace Workspace      @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  prLinks   GithubPrLink[]
+
+  @@map("integrations")
+}
+
+model GithubPrLink {
+  id            String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  issueId       String    @map("issue_id") @db.Uuid
+  integrationId String    @map("integration_id") @db.Uuid
+  prNumber      String    @map("pr_number") @db.VarChar(20)
+  prUrl         String    @map("pr_url")
+  repoFullName  String    @map("repo_full_name") @db.VarChar(255)
+  headBranch    String    @map("head_branch") @db.VarChar(255)
+  prStatus      PrStatus  @default(open) @map("pr_status")
+  mergedAt      DateTime? @map("merged_at")
+  createdAt     DateTime  @default(now()) @map("created_at")
+
+  issue       Issue       @relation(fields: [issueId], references: [id], onDelete: Cascade)
+  integration Integration @relation(fields: [integrationId], references: [id])
+
+  @@map("github_pr_links")
+}
+
+model WebhookEvent {
+  id           String          @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  workspaceId  String?         @map("workspace_id") @db.Uuid
+  provider     WebhookProvider
+  eventType    String          @map("event_type") @db.VarChar(100)
+  payload      Json
+  status       WebhookStatus   @default(pending)
+  retryCount   Int             @default(0) @map("retry_count")
+  errorMessage String?         @map("error_message")
+  processedAt  DateTime?       @map("processed_at")
+  createdAt    DateTime        @default(now()) @map("created_at")
+
+  workspace Workspace? @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@map("webhook_events")
+}
+
+model AiInteraction {
+  id           String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  workspaceId  String    @map("workspace_id") @db.Uuid
+  userId       String    @map("user_id") @db.Uuid
+  issueId      String?   @map("issue_id") @db.Uuid
+  feature      AiFeature
+  model        String    @db.VarChar(50)
+  inputTokens  Int       @map("input_tokens")
+  outputTokens Int       @map("output_tokens")
+  latencyMs    Int       @map("latency_ms")
+  createdAt    DateTime  @default(now()) @map("created_at")
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id])
+  issue     Issue?    @relation(fields: [issueId], references: [id])
+
+  @@map("ai_interactions")
+}
+
+model ApiKey {
+  id          String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  workspaceId String    @map("workspace_id") @db.Uuid
+  createdBy   String    @map("created_by") @db.Uuid
+  name        String    @db.VarChar(100)
+  keyHash     String    @map("key_hash") @db.VarChar(255)
+  keyPrefix   String    @map("key_prefix") @db.VarChar(10)
+  scopes      Json      @default("[]")
+  lastUsedAt  DateTime? @map("last_used_at")
+  expiresAt   DateTime? @map("expires_at")
+  createdAt   DateTime  @default(now()) @map("created_at")
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  creator   User      @relation(fields: [createdBy], references: [id])
+
+  @@map("api_keys")
+}
