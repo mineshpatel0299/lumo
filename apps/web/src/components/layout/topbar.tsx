@@ -4,6 +4,7 @@ import React from 'react'
 import { Search, Bell, Command } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Kbd } from '@/components/ui/kbd'
+import { UserButton } from '@clerk/nextjs'
 
 export function Topbar() {
   return (
@@ -36,10 +37,18 @@ export function Topbar() {
           <div className="absolute top-2 right-2 w-2 h-2 bg-accent rounded-full border-2 border-bg-base" />
         </Button>
 
-        {/* User Button Placeholder */}
-        <div className="w-8 h-8 rounded-full bg-accent-muted border border-accent/20 flex items-center justify-center text-accent text-xs font-bold cursor-pointer hover:scale-105 transition-transform">
-          MP
-        </div>
+        <UserButton 
+          afterSignOutUrl="/sign-in"
+          appearance={{
+            elements: {
+              userButtonAvatarBox: "w-8 h-8 hover:scale-105 transition-transform",
+              userButtonPopoverCard: "bg-bg-surface border border-border-subtle shadow-2xl",
+              userButtonPopoverActionButton: "hover:bg-bg-elevated text-text-primary",
+              userButtonPopoverActionButtonText: "text-text-primary",
+              userButtonPopoverFooter: "hidden"
+            }
+          }}
+        />
       </div>
     </header>
   )

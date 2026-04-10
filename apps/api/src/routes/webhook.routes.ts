@@ -1,6 +1,7 @@
 import { Hono } from 'hono'
 import { Webhook } from 'svix'
 import { env } from 'hono/adapter'
+import { prisma } from '../lib/prisma'
 
 const webhookRoutes = new Hono()
 
@@ -35,18 +36,37 @@ webhookRoutes.post('/clerk', async (c) => {
     return c.json({ error: 'Invalid signature' }, 400)
   }
 
-  const { id } = evt.data
   const eventType = evt.type
 
-  console.log(`Webhook received: ${eventType} with ID ${id}`)
-
   if (eventType === 'user.created' || eventType === 'user.updated') {
-    const { email_addresses, first_name, last_name, image_url } = evt.data
+    const { id, email_addresses, first_name, last_name, image_url } = evt.data
     const email = email_addresses[0].email_address
     const name = `${first_name ?? ''} ${last_name ?? ''}`.trim() || 'User'
     
-    // Here we would sync to Neon DB
-    console.log(`Syncing user: ${email} (${name})`)
+    await prisma.user.upsert({
+      where: { clerkId: id },
+      update: {
+        email,
+        name,
+        avatarUrl: image_url,
+      },
+      create: {
+        clerkId: id,
+        email,
+        name,
+        avatarUrl: image_url,
+      },
+    })
+
+    console.log(`Synced user: ${email} (${name})`)
+  }
+
+  if (eventType === 'user.deleted') {
+    const { id } = evt.data
+    await prisma.user.delete({
+      where: { clerkId: id },
+    })
+    console.log(`Deleted user with Clerk ID: ${id}`)
   }
 
   return c.json({ success: true })

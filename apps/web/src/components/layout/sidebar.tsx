@@ -24,6 +24,8 @@ const navItems = [
   { name: 'Analytics', icon: BarChart2, href: '/analytics' },
 ]
 
+import { UserButton } from '@clerk/nextjs'
+
 export function Sidebar() {
   const pathname = usePathname()
   const { isSidebarCollapsed, setSidebarCollapsed } = useUIStore()
@@ -103,7 +105,7 @@ export function Sidebar() {
       )}
 
       {/* Footer Settings */}
-      <div className="p-2 border-t border-border-subtle">
+      <div className="p-2 border-t border-border-subtle space-y-1">
         <Link 
           href="/settings"
           className={cn(
@@ -114,6 +116,22 @@ export function Sidebar() {
           <Settings size={18} />
           {!isSidebarCollapsed && <span className="text-sm font-medium">Settings</span>}
         </Link>
+        
+        <div className="flex items-center gap-3 px-3 py-2">
+          <UserButton 
+            afterSignOutUrl="/sign-in"
+            appearance={{
+              elements: {
+                userButtonAvatarBox: "w-6 h-6",
+                userButtonPopoverCard: "bg-bg-surface border border-border-subtle shadow-2xl",
+                userButtonPopoverActionButton: "hover:bg-bg-elevated text-text-primary",
+                userButtonPopoverActionButtonText: "text-text-primary",
+                userButtonPopoverFooter: "hidden"
+              }
+            }}
+          />
+          {!isSidebarCollapsed && <span className="text-sm font-medium text-text-secondary">My Profile</span>}
+        </div>
       </div>
     </aside>
   )

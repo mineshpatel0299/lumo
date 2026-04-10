@@ -471,6 +471,7 @@ model IssueWatcher {
 
 model AnalyticsSnapshot {
   id           String              @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  workspaceId  String              @map("workspace_id") @db.Uuid
   projectId    String              @map("project_id") @db.Uuid
   sprintId     String?             @map("sprint_id") @db.Uuid
   snapshotDate DateTime            @map("snapshot_date") @db.Date
@@ -478,10 +479,11 @@ model AnalyticsSnapshot {
   data         Json
   computedAt   DateTime            @default(now()) @map("computed_at")
 
-  project Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  sprint  Sprint?  @relation(fields: [sprintId], references: [id])
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  project   Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  sprint    Sprint?   @relation(fields: [sprintId], references: [id])
 
-  @@unique([projectId, sprintId, snapshotDate, metricType])
+  @@unique([workspaceId, projectId, sprintId, snapshotDate, metricType])
   @@map("analytics_snapshots")
 }
 
@@ -569,6 +571,7 @@ model AiInteraction {
   createdAt    DateTime  @default(now()) @map("created_at")
 
   workspace Workspace @relation(fields: [workspaceId], references: [id])
+  user      User      @relation(fields: [userId], references: [id])
   issue     Issue?    @relation(fields: [issueId], references: [id])
 
   @@map("ai_interactions")
