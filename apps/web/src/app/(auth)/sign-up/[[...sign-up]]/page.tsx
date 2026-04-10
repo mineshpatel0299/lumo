@@ -9,11 +9,12 @@ export default function Page() {
   return (
     <div className="flex min-h-screen w-screen bg-bg-base overflow-hidden">
       {/* Left Side: Visual & Brand */}
-      <div className="hidden lg:flex relative w-1/2 flex-col justify-between p-12 overflow-hidden border-r border-border-subtle">
+      <div className="hidden lg:flex relative w-1/2 flex-col justify-between p-12 overflow-hidden border-r border-border-subtle bg-zinc-950">
         <Image 
           src="/login-bg.png" 
           alt="Lumo background" 
           fill 
+          unoptimized
           className="object-cover opacity-60 pointer-events-none"
           priority
         />
