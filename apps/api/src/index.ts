@@ -2,11 +2,14 @@ import { serve } from '@hono/node-server'
 import { Hono } from 'hono'
 import { logger } from 'hono/logger'
 import { cors } from 'hono/cors'
+import webhookRoutes from './routes/webhook.routes'
 
 const app = new Hono()
 
 app.use('*', logger())
 app.use('*', cors())
+
+app.route('/webhooks', webhookRoutes)
 
 app.get('/health', (c) => {
   return c.json({
