@@ -7,12 +7,18 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Badge } from '@/components/ui/badge'
-import { Check, ChevronRight, ChevronLeft, Users, Layout, Rocket } from 'lucide-react'
+import { Check, ChevronRight, ChevronLeft, Users, Layout, Rocket, Loader2 } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { useAuth } from '@clerk/nextjs'
+import { useWorkspaceStore } from '@/store/workspace.store'
 
 export default function OnboardingPage() {
+  const { getToken } = useAuth()
   const router = useRouter()
+  const { setCurrentWorkspace, setWorkspaces } = useWorkspaceStore()
+  
   const [step, setStep] = useState(1)
+  const [loading, setLoading] = useState(false)
   const [formData, setFormData] = useState({
     workspaceName: '',
     workspaceSlug: '',
@@ -23,10 +29,37 @@ export default function OnboardingPage() {
   const nextStep = () => setStep(s => s + 1)
   const prevStep = () => setStep(s => s - 1)
 
-  const handleFinish = () => {
-    // In a real app, we would call the API to create the workspace
-    // For now, we'll just redirect to the dashboard
-    router.push(`/${formData.workspaceSlug || 'default'}`)
+  const handleFinish = async () => {
+    setLoading(true)
+    try {
+      const token = await getToken()
+      const response = await fetch('http://localhost:3001/workspaces', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          name: formData.workspaceName,
+          slug: formData.workspaceSlug
+        })
+      })
+
+      if (!response.ok) throw new Error('Failed to create workspace')
+
+      const { workspace } = await response.json()
+      
+      // Update global state
+      setCurrentWorkspace(workspace)
+      setWorkspaces([workspace])
+
+      router.push(`/${workspace.slug}`)
+    } catch (err) {
+      console.error(err)
+      alert("Something went wrong creating your workspace.")
+    } finally {
+      setLoading(false)
+    }
   }
 
   return (
@@ -178,7 +211,7 @@ export default function OnboardingPage() {
           <Button 
             variant="ghost" 
             onClick={prevStep} 
-            disabled={step === 1}
+            disabled={step === 1 || loading}
           >
             <ChevronLeft size={16} className="mr-2" />
             Back
@@ -189,8 +222,12 @@ export default function OnboardingPage() {
               <ChevronRight size={16} className="ml-2" />
             </Button>
           ) : (
-            <Button onClick={handleFinish} className="bg-accent hover:bg-accent-hover text-white shadow-lg shadow-accent/20">
-              Get Started
+            <Button 
+              onClick={handleFinish} 
+              disabled={loading}
+              className="bg-accent hover:bg-accent-hover text-white shadow-lg shadow-accent/20 min-w-[120px]"
+            >
+              {loading ? <Loader2 size={16} className="animate-spin" /> : "Get Started"}
             </Button>
           )}
         </CardFooter>

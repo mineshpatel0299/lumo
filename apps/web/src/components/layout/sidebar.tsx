@@ -25,6 +25,7 @@ const navItems = [
 ]
 
 import { UserButton } from '@clerk/nextjs'
+import { WorkspaceSwitcher } from './workspace-switcher'
 
 export function Sidebar() {
   const pathname = usePathname()
@@ -38,22 +39,23 @@ export function Sidebar() {
       )}
     >
       {/* Sidebar Header */}
-      <div className="h-14 flex items-center px-4 border-b border-border-subtle justify-between">
-        {!isSidebarCollapsed && (
-          <div className="flex items-center gap-2">
-            <div className="w-6 h-6 bg-accent rounded-sm flex items-center justify-center text-white font-bold text-xs">
-              L
-            </div>
-            <span className="font-bold text-sm tracking-tight text-text-primary">Lumo</span>
-          </div>
-        )}
+      {!isSidebarCollapsed ? (
+        <WorkspaceSwitcher />
+      ) : (
+        <div className="h-14 flex items-center justify-center border-b border-border-subtle">
+           <div className="w-6 h-6 bg-accent rounded-sm flex items-center justify-center text-white font-bold text-xs">L</div>
+        </div>
+      )}
+      
+      {/* Sidebar Toggle (Floating / Overlay) */}
+      <div className="absolute -right-3 top-16 z-50">
         <Button 
-          variant="ghost" 
+          variant="secondary" 
           size="sm" 
-          className="p-1 h-auto"
+          className="w-6 h-6 p-0 rounded-full border border-border-subtle shadow-md hover:bg-bg-elevated"
           onClick={() => setSidebarCollapsed(!isSidebarCollapsed)}
         >
-          {isSidebarCollapsed ? <ChevronRight size={16} /> : <ChevronLeft size={16} />}
+          {isSidebarCollapsed ? <ChevronRight size={12} /> : <ChevronLeft size={12} />}
         </Button>
       </div>
 

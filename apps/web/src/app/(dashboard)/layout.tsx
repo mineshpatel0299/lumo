@@ -1,5 +1,6 @@
 import { Sidebar } from "@/components/layout/sidebar";
 import { Topbar } from "@/components/layout/topbar";
+import { CursorRenderer } from "@/components/realtime/cursor-renderer";
 
 export default function DashboardLayout({
   children,
@@ -8,6 +9,7 @@ export default function DashboardLayout({
 }>) {
   return (
     <div className="flex h-screen overflow-hidden">
+      <CursorRenderer />
       <Sidebar />
       <div className="flex-1 flex flex-col min-w-0">
         <Topbar />

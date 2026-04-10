@@ -5,6 +5,9 @@ import { Search, Bell, Command } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Kbd } from '@/components/ui/kbd'
 import { UserButton } from '@clerk/nextjs'
+import { CreateIssueModal } from '../modals/create-issue-modal'
+import { SummaryPanel } from '../dashboard/summary-panel'
+import { SearchModal } from '../modals/search-modal'
 
 export function Topbar() {
   return (
@@ -18,19 +21,10 @@ export function Topbar() {
 
       {/* Global Actions */}
       <div className="flex items-center gap-3">
-        {/* Cmd+K Search Search Trigger */}
-        <div className="hidden md:flex items-center bg-bg-surface border border-border-subtle rounded-md px-2 py-1 gap-4 cursor-pointer hover:border-border-default transition-colors">
-          <div className="flex items-center gap-2 text-text-tertiary">
-            <Search size={14} />
-            <span className="text-xs font-medium">Search or jump to...</span>
-          </div>
-          <div className="flex items-center gap-0.5 opacity-60">
-            <Kbd>
-              <Command size={10} className="inline-block" />
-              <span>K</span>
-            </Kbd>
-          </div>
-        </div>
+        <SearchModal />
+
+        <CreateIssueModal />
+        <SummaryPanel />
 
         <Button variant="ghost" size="sm" className="relative p-2">
           <Bell size={18} className="text-text-secondary" />
