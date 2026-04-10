@@ -1,5 +1,7 @@
 {
   "name": "lumo-monorepo",
+  "version": "0.1.0",
+  "packageManager": "bun@1.3.5",
   "private": true,
   "workspaces": [
     "apps/*",
@@ -9,5 +11,8 @@
     "dev": "turbo dev",
     "build": "turbo build",
     "lint": "turbo lint"
+  },
+  "devDependencies": {
+    "turbo": "^2.9.5"
   }
 }

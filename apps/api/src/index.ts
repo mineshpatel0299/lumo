@@ -1,3 +1,4 @@
+import { serve } from '@hono/node-server'
 import { Hono } from 'hono'
 import { logger } from 'hono/logger'
 import { cors } from 'hono/cors'
@@ -17,6 +18,14 @@ app.get('/health', (c) => {
 
 app.get('/', (c) => {
   return c.text('Lumo API - Powered by Hono')
+})
+
+const port = 3001
+console.log(`Server is running on http://localhost:${port}`)
+
+serve({
+  fetch: app.fetch,
+  port
 })
 
 export default app
