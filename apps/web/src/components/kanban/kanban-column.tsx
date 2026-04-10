@@ -9,16 +9,20 @@ import { MoreHorizontal, Plus } from 'lucide-react'
 interface KanbanColumnProps {
   id: string
   title: string
+  color?: string
   issues: any[]
 }
 
-export function KanbanColumn({ id, title, issues }: KanbanColumnProps) {
+export function KanbanColumn({ id, title, color, issues }: KanbanColumnProps) {
   const { setNodeRef } = useDroppable({ id })
 
   return (
     <div className="flex flex-col w-80 shrink-0 h-full">
       <div className="flex items-center justify-between mb-4 px-2">
         <div className="flex items-center gap-2">
+          {color && (
+            <div className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: color }} />
+          )}
           <h3 className="text-sm font-bold text-text-primary uppercase tracking-widest">{title}</h3>
           <span className="text-[10px] font-bold bg-bg-elevated px-2 py-0.5 rounded-full text-text-tertiary">
             {issues.length}

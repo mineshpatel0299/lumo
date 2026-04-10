@@ -1,11 +1,17 @@
+'use client'
+
 import { Button } from "@/components/ui/button";
 import { Plus, ArrowRight, Github } from "lucide-react";
+import { useUser } from "@clerk/nextjs";
 
 export default function Home() {
+  const { user } = useUser()
+  const firstName = user?.firstName || user?.username || 'there'
+
   return (
     <div className="max-w-4xl mx-auto space-y-8 animate-fade-up">
       <header className="space-y-2">
-        <h1 className="text-3xl font-bold tracking-tight text-text-primary">Welcome back, Minesh</h1>
+        <h1 className="text-3xl font-bold tracking-tight text-text-primary">Welcome back, {firstName}</h1>
         <p className="text-text-tertiary">Here&apos;s what&apos;s happening with your projects today.</p>
       </header>
 

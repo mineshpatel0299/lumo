@@ -32,9 +32,9 @@ export function Sidebar() {
   const { isSidebarCollapsed, setSidebarCollapsed } = useUIStore()
 
   return (
-    <aside 
+    <aside
       className={cn(
-        "h-screen bg-bg-surface border-r border-border-subtle flex flex-col transition-all duration-300 ease-smooth z-30",
+        "relative h-screen bg-bg-surface border-r border-border-subtle flex flex-col transition-all duration-300 ease-smooth z-30",
         isSidebarCollapsed ? "w-16" : "w-64"
       )}
     >

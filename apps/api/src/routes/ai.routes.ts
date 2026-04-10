@@ -2,6 +2,7 @@ import { Hono } from 'hono'
 import OpenAI from 'openai'
 import { authMiddleware } from '../middleware/auth.middleware'
 import { env } from 'hono/adapter'
+import { prisma } from '../lib/prisma'
 
 const aiRoutes = new Hono()
 

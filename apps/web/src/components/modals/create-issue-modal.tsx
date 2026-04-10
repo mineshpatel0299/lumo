@@ -23,17 +23,17 @@ import {
 import { Textarea } from "@/components/ui/textarea"
 import { Plus, Loader2, Sparkles, Hash, AlignLeft, BarChart, Layout } from 'lucide-react'
 import { useAuth } from '@clerk/nextjs'
-import { useParams } from 'next/navigation'
 import { useWorkspaceStore } from '@/store/workspace.store'
+import { API_URL } from '@/lib/api'
 import { motion, AnimatePresence } from 'framer-motion'
 
 export function CreateIssueModal({ onIssueCreated }: { onIssueCreated?: () => void }) {
   const { getToken } = useAuth()
-  const { workspaceSlug } = useParams()
   const { currentWorkspace } = useWorkspaceStore()
-  
+
   const [open, setOpen] = useState(false)
   const [loading, setLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
   const [formData, setFormData] = useState({
     title: '',
     description: '',
@@ -45,55 +45,76 @@ export function CreateIssueModal({ onIssueCreated }: { onIssueCreated?: () => vo
     e.preventDefault()
     if (!formData.title) return
 
+    // Guard: workspace must be loaded before we can create an issue
+    const project = currentWorkspace?.projects?.[0]
+    const status =
+      currentWorkspace?.statuses?.find(
+        (s) => s.name.toLowerCase() === formData.status.toLowerCase()
+      ) ?? currentWorkspace?.statuses?.[0]
+
+    if (!currentWorkspace?.id || !project?.id || !status?.id) {
+      setError('Workspace is still loading. Please wait a moment and try again.')
+      return
+    }
+
     setLoading(true)
+    setError(null)
     try {
       const token = await getToken()
-      const project = currentWorkspace?.projects?.[0]
-      const status = currentWorkspace?.statuses?.find(s => s.name.toLowerCase() === formData.status.toLowerCase()) || currentWorkspace?.statuses?.[0]
 
-      const response = await fetch('http://localhost:3001/issues', {
+      const response = await fetch(API_URL + '/issues', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
+          Authorization: `Bearer ${token}`,
         },
         body: JSON.stringify({
           title: formData.title,
-          description: formData.description,
+          description: formData.description || undefined,
           priority: formData.priority,
-          workspaceId: currentWorkspace?.id,
-          projectId: project?.id,
-          statusId: status?.id
-        })
+          workspaceId: currentWorkspace.id,
+          projectId: project.id,
+          statusId: status.id,
+        }),
       })
 
-      if (!response.ok) throw new Error('Failed to create issue')
+      if (!response.ok) {
+        const data = await response.json().catch(() => ({}))
+        throw new Error((data as any).error ?? `Server error ${response.status}`)
+      }
 
       setOpen(false)
       setFormData({ title: '', description: '', status: 'todo', priority: 'no_priority' })
       if (onIssueCreated) onIssueCreated()
-    } catch (err) {
-      console.error(err)
+    } catch (err: any) {
+      console.error('[CreateIssue]', err)
+      setError(err.message ?? 'Something went wrong. Please try again.')
     } finally {
       setLoading(false)
     }
   }
 
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger 
+    <Dialog
+      open={open}
+      onOpenChange={(next) => {
+        setOpen(next)
+        if (!next) setError(null)
+      }}
+    >
+      <DialogTrigger
         render={
-          <Button 
-            size="sm" 
+          <Button
+            size="sm"
             className="bg-accent hover:bg-accent-hover text-white gap-2 shadow-lg shadow-accent/20 transition-all active:scale-95 font-semibold h-9 rounded-lg"
-          >
-            <div className="w-4 h-4 bg-white/20 rounded-md flex items-center justify-center">
-              <Plus size={12} strokeWidth={3} />
-            </div>
-            <span className="text-xs uppercase tracking-wider">New Issue</span>
-          </Button>
+          />
         }
-      />
+      >
+        <div className="w-4 h-4 bg-white/20 rounded-md flex items-center justify-center">
+          <Plus size={12} strokeWidth={3} />
+        </div>
+        <span className="text-xs uppercase tracking-wider">New Issue</span>
+      </DialogTrigger>
       
       <DialogContent className="sm:max-w-[540px] bg-bg-surface border-border-subtle shadow-[0_0_50px_-12px_rgba(0,0,0,0.5)] p-0 overflow-hidden rounded-2xl">
         <form onSubmit={handleSubmit} className="flex flex-col">
@@ -144,7 +165,7 @@ export function CreateIssueModal({ onIssueCreated }: { onIssueCreated?: () => vo
                       setLoading(true)
                       try {
                         const token = await getToken()
-                        const res = await fetch('http://localhost:3001/ai/suggest-description', {
+                        const res = await fetch(API_URL + '/ai/suggest-description', {
                           method: 'POST',
                           headers: { 
                             'Content-Type': 'application/json',
@@ -208,6 +229,13 @@ export function CreateIssueModal({ onIssueCreated }: { onIssueCreated?: () => vo
               </div>
             </div>
           </div>
+
+          {/* Error Banner */}
+          {error && (
+            <div className="mx-6 mb-0 px-4 py-2.5 rounded-lg bg-red-500/10 border border-red-500/20 text-red-400 text-xs font-medium">
+              {error}
+            </div>
+          )}
 
           {/* Action Footer */}
           <div className="bg-bg-base/30 border-t border-border-subtle p-4 flex justify-between items-center">

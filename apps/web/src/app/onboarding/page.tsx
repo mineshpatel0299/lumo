@@ -11,6 +11,7 @@ import { Check, ChevronRight, ChevronLeft, Users, Layout, Rocket, Loader2 } from
 import { cn } from '@/lib/utils'
 import { useAuth } from '@clerk/nextjs'
 import { useWorkspaceStore } from '@/store/workspace.store'
+import { API_URL } from '@/lib/api'
 
 export default function OnboardingPage() {
   const { getToken } = useAuth()
@@ -19,6 +20,7 @@ export default function OnboardingPage() {
   
   const [step, setStep] = useState(1)
   const [loading, setLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
   const [formData, setFormData] = useState({
     workspaceName: '',
     workspaceSlug: '',
@@ -26,37 +28,50 @@ export default function OnboardingPage() {
     template: 'kanban'
   })
 
+  const sanitizeSlug = (value: string) =>
+    value
+      .toLowerCase()
+      .trim()
+      .replace(/[^a-z0-9-]/g, '-')
+      .replace(/-{2,}/g, '-')
+      .replace(/^-|-$/g, '')
+
   const nextStep = () => setStep(s => s + 1)
   const prevStep = () => setStep(s => s - 1)
 
   const handleFinish = async () => {
+    const slug = sanitizeSlug(formData.workspaceSlug)
+    if (!slug) {
+      setError('Workspace URL can only contain letters, numbers, and hyphens.')
+      return
+    }
+
     setLoading(true)
+    setError(null)
     try {
       const token = await getToken()
-      const response = await fetch('http://localhost:3001/workspaces', {
+      const response = await fetch(API_URL + '/workspaces', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
+          'Authorization': `Bearer ${token}`,
         },
-        body: JSON.stringify({
-          name: formData.workspaceName,
-          slug: formData.workspaceSlug
-        })
+        body: JSON.stringify({ name: formData.workspaceName, slug }),
       })
 
+      if (response.status === 409) {
+        setError('That workspace URL is already taken. Please choose a different one.')
+        return
+      }
       if (!response.ok) throw new Error('Failed to create workspace')
 
       const { workspace } = await response.json()
-      
-      // Update global state
       setCurrentWorkspace(workspace)
       setWorkspaces([workspace])
-
       router.push(`/${workspace.slug}`)
     } catch (err) {
       console.error(err)
-      alert("Something went wrong creating your workspace.")
+      setError('Something went wrong creating your workspace. Please try again.')
     } finally {
       setLoading(false)
     }
@@ -103,16 +118,16 @@ export default function OnboardingPage() {
             <CardContent className="space-y-4">
               <div className="space-y-1.5">
                 <Label htmlFor="name">Workspace Name</Label>
-                <Input 
-                  id="name" 
-                  placeholder="Acme Corp" 
+                <Input
+                  id="name"
+                  placeholder="Acme Corp"
                   value={formData.workspaceName}
                   onChange={(e) => {
                     const name = e.target.value
-                    setFormData(prev => ({ 
-                      ...prev, 
+                    setFormData(prev => ({
+                      ...prev,
                       workspaceName: name,
-                      workspaceSlug: name.toLowerCase().replace(/\s+/g, '-')
+                      workspaceSlug: sanitizeSlug(name),
                     }))
                   }}
                 />
@@ -121,11 +136,13 @@ export default function OnboardingPage() {
                 <Label htmlFor="slug">Workspace URL</Label>
                 <div className="flex items-center gap-1.5">
                   <span className="text-sm text-text-tertiary">lumo.app/</span>
-                  <Input 
-                    id="slug" 
-                    placeholder="acme-corp" 
+                  <Input
+                    id="slug"
+                    placeholder="acme-corp"
                     value={formData.workspaceSlug}
-                    onChange={(e) => setFormData(prev => ({ ...prev, workspaceSlug: e.target.value }))}
+                    onChange={(e) =>
+                      setFormData(prev => ({ ...prev, workspaceSlug: sanitizeSlug(e.target.value) }))
+                    }
                   />
                 </div>
               </div>
@@ -207,6 +224,11 @@ export default function OnboardingPage() {
           </>
         )}
 
+        {error && (
+          <div className="mx-6 mb-2 px-4 py-3 rounded-lg bg-red-500/10 border border-red-500/20 text-red-400 text-sm">
+            {error}
+          </div>
+        )}
         <CardFooter className="flex justify-between border-t border-border-subtle pt-6">
           <Button 
             variant="ghost" 

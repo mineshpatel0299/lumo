@@ -1,9 +1,10 @@
 'use client'
 
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useCallback } from 'react'
 import { io, Socket } from 'socket.io-client'
 import { useAuth, useUser } from '@clerk/nextjs'
 import { usePresenceStore } from '@/store/presence.store'
+import { API_URL } from '@/lib/api'
 
 export const useSocket = (workspaceId?: string) => {
   const socketRef = useRef<Socket | null>(null)
@@ -14,7 +15,7 @@ export const useSocket = (workspaceId?: string) => {
   useEffect(() => {
     if (!workspaceId || !user) return
 
-    const socket = io('http://localhost:3001', {
+    const socket = io(API_URL, {
       auth: async (cb) => {
         const token = await getToken()
         cb({ token })
@@ -48,16 +49,16 @@ export const useSocket = (workspaceId?: string) => {
     }
   }, [workspaceId, user, getToken, updateCursor, removeCursor])
 
-  const broadcastCursor = (x: number, y: number) => {
+  const broadcastCursor = useCallback((x: number, y: number) => {
     if (socketRef.current && user) {
       socketRef.current.emit('cursor-move', {
         x,
         y,
         name: user.fullName || user.username || 'User',
-        color: '#7C3AED' // Default Lumo Violet, could be dynamic
+        color: '#7C3AED',
       })
     }
-  }
+  }, [user])
 
   return { broadcastCursor }
 }

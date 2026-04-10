@@ -9,10 +9,11 @@ import { Avatar, AvatarFallback, AvatarImage } from '@radix-ui/react-avatar'
 import { MoreHorizontal, GripVertical } from 'lucide-react'
 
 interface IssueCardProps {
-  issue: any // Using any for now, will type with generated Prisma types
+  issue: any
+  isDragOverlay?: boolean
 }
 
-export function IssueCard({ issue }: IssueCardProps) {
+export function IssueCard({ issue, isDragOverlay }: IssueCardProps) {
   const {
     attributes,
     listeners,
@@ -25,7 +26,7 @@ export function IssueCard({ issue }: IssueCardProps) {
   const style = {
     transform: CSS.Transform.toString(transform),
     transition,
-    opacity: isDragging ? 0.5 : 1,
+    opacity: isDragging && !isDragOverlay ? 0.4 : 1,
   }
 
   return (

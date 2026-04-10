@@ -12,10 +12,8 @@ import {
   DragStartEvent,
   DragOverEvent,
   DragEndEvent,
-  defaultDropAnimationSideEffects,
 } from '@dnd-kit/core'
 import {
-  arrayMove,
   SortableContext,
   sortableKeyboardCoordinates,
   verticalListSortingStrategy,
@@ -24,41 +22,63 @@ import { KanbanColumn } from './kanban-column'
 import { IssueCard } from './issue-card'
 import { useAuth } from '@clerk/nextjs'
 import { io, Socket } from 'socket.io-client'
+import { useWorkspaceStore } from '@/store/workspace.store'
+import { API_URL } from '@/lib/api'
 
-const COLUMNS = [
-  { id: 'todo', title: 'To Do' },
+// Column definitions driven by the workspace statuses fetched from API.
+// Fallback static list is used when statuses haven't loaded yet.
+const FALLBACK_COLUMNS = [
+  { id: 'backlog',     title: 'Backlog' },
+  { id: 'todo',        title: 'To Do' },
   { id: 'in-progress', title: 'In Progress' },
-  { id: 'done', title: 'Done' }
+  { id: 'done',        title: 'Done' },
 ]
+
+function toColumnId(statusName: string): string {
+  return statusName.toLowerCase().replace(/\s+/g, '-')
+}
 
 export function KanbanBoard({ workspaceSlug }: { workspaceSlug: string }) {
   const { getToken } = useAuth()
+  const { currentWorkspace } = useWorkspaceStore()
   const [issues, setIssues] = useState<any[]>([])
   const [activeId, setActiveId] = useState<string | null>(null)
   const socketRef = React.useRef<Socket | null>(null)
 
+  // Build columns from workspace statuses if available
+  const columns = currentWorkspace?.statuses?.length
+    ? currentWorkspace.statuses
+        .slice()
+        .sort((a, b) => a.position - b.position)
+        .map((s) => ({ id: toColumnId(s.name), title: s.name, statusId: s.id, color: s.color }))
+    : FALLBACK_COLUMNS.map((c) => ({ ...c, statusId: c.id, color: undefined }))
+
   const fetchIssues = useCallback(async () => {
-    const token = await getToken()
-    const res = await fetch(`http://localhost:3001/issues/${workspaceSlug}`, {
-      headers: { 'Authorization': `Bearer ${token}` }
-    })
-    if (res.ok) {
-      const data = await res.json()
-      setIssues(data.issues)
+    try {
+      const token = await getToken()
+      const res = await fetch(API_URL + `/issues/${workspaceSlug}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      })
+      if (res.ok) {
+        const data = await res.json()
+        setIssues(data.issues)
+      }
+    } catch (err) {
+      console.error('Failed to fetch issues:', err)
     }
   }, [workspaceSlug, getToken])
 
   useEffect(() => {
     fetchIssues()
-    
-    // Setup socket for real-time moves
-    const socket = io('http://localhost:3001')
+
+    const socket = io(API_URL)
     socketRef.current = socket
     socket.emit('join-workspace', workspaceSlug)
-    
     socket.on('issue-moved', () => fetchIssues())
-    
-    return () => { socket.disconnect() }
+
+    return () => {
+      socket.disconnect()
+    }
   }, [workspaceSlug, fetchIssues])
 
   const sensors = useSensors(
@@ -74,73 +94,81 @@ export function KanbanBoard({ workspaceSlug }: { workspaceSlug: string }) {
     const { active, over } = event
     if (!over) return
 
-    const activeId = active.id as string
+    const activeIssue = issues.find((i) => i.id === active.id)
+    if (!activeIssue) return
+
     const overId = over.id as string
+    const isOverColumn = columns.some((col) => col.id === overId)
+    const overIssue = issues.find((i) => i.id === overId)
 
-    const activeIssue = issues.find(i => i.id === activeId)
-    const overIssue = issues.find(i => i.id === overId)
+    const newColumnId = isOverColumn
+      ? overId
+      : overIssue
+      ? toColumnId(overIssue.status?.name ?? 'backlog')
+      : null
 
-    // If hovering over a column
-    const isOverAColumn = COLUMNS.some(col => col.id === overId)
+    if (!newColumnId) return
 
-    if (activeIssue && (overIssue || isOverAColumn)) {
-      const newStatus = isOverAColumn ? overId : overIssue?.status?.name.toLowerCase().replace(' ', '-') || 'todo'
-      const oldStatus = activeIssue.status?.name.toLowerCase().replace(' ', '-') || 'todo'
+    const currentColumnId = toColumnId(activeIssue.status?.name ?? 'backlog')
+    if (newColumnId === currentColumnId) return
 
-      if (newStatus !== oldStatus) {
-        setIssues((prev) => {
-          return prev.map(issue => {
-            if (issue.id === activeId) {
-              return { ...issue, status: { ...issue.status, name: newStatus.replace('-', ' ') } }
+    // Optimistic update: change the status name so the card moves columns
+    const targetColumn = columns.find((c) => c.id === newColumnId)
+    setIssues((prev) =>
+      prev.map((issue) =>
+        issue.id === active.id
+          ? {
+              ...issue,
+              status: {
+                ...issue.status,
+                id: targetColumn?.statusId ?? issue.status?.id,
+                name: targetColumn?.title ?? issue.status?.name,
+              },
             }
-            return issue
-          })
-        })
-      }
-    }
+          : issue
+      )
+    )
   }
 
   const handleDragEnd = async (event: DragEndEvent) => {
     const { active, over } = event
     setActiveId(null)
-
     if (!over) return
 
-    const activeId = active.id as string
-    const overId = over.id as string
-
-    const activeIssue = issues.find(i => i.id === activeId)
+    const activeIssue = issues.find((i) => i.id === active.id)
     if (!activeIssue) return
 
-    // Update status and sort order in DB
-    const token = await getToken()
-    const newStatusId = overId === 'todo' ? 'todo-id' : overId === 'in-progress' ? 'ip-id' : 'done-id' // Placeholder
+    const overId = over.id as string
+    const isOverColumn = columns.some((col) => col.id === overId)
+    const targetColumnId = isOverColumn
+      ? overId
+      : toColumnId(issues.find((i) => i.id === overId)?.status?.name ?? 'backlog')
+
+    const targetColumn = columns.find((c) => c.id === targetColumnId)
+    const newStatusId = targetColumn?.statusId ?? activeIssue.status?.id
+
+    if (!newStatusId || newStatusId === activeIssue.status?.id) return
 
     try {
-      await fetch(`http://localhost:3001/issues/${activeId}`, {
+      const token = await getToken()
+      await fetch(API_URL + `/issues/${active.id}`, {
         method: 'PATCH',
-        headers: { 
+        headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}` 
+          Authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify({
-          statusId: overId.replace('-', ' '), // Simplified for now
-          sortOrder: 0 // Will implement proper ordering logic
-        })
+        body: JSON.stringify({ statusId: newStatusId, sortOrder: activeIssue.sortOrder }),
       })
-      
-      socketRef.current?.emit('issue-moved', { issueId: activeId })
+      socketRef.current?.emit('issue-moved', { issueId: active.id })
     } catch (err) {
-      console.error(err)
+      console.error('Failed to update issue:', err)
+      // Revert optimistic update on failure
+      fetchIssues()
     }
   }
 
-  const getIssuesByStatus = (status: string) => {
-    return issues.filter(i => {
-      const s = i.status?.name.toLowerCase().replace(' ', '-') || 'todo'
-      return s === status
-    })
-  }
+  const getIssuesByColumn = (columnId: string) =>
+    issues.filter((i) => toColumnId(i.status?.name ?? 'backlog') === columnId)
 
   return (
     <div className="h-full flex overflow-x-auto gap-6 pb-4 scrollbar-hide">
@@ -152,19 +180,20 @@ export function KanbanBoard({ workspaceSlug }: { workspaceSlug: string }) {
         onDragEnd={handleDragEnd}
       >
         <div className="flex gap-6 min-h-full">
-          {COLUMNS.map((col) => (
-            <KanbanColumn 
-              key={col.id} 
-              id={col.id} 
-              title={col.title} 
-              issues={getIssuesByStatus(col.id)} 
+          {columns.map((col) => (
+            <KanbanColumn
+              key={col.id}
+              id={col.id}
+              title={col.title}
+              color={(col as any).color}
+              issues={getIssuesByColumn(col.id)}
             />
           ))}
         </div>
 
         <DragOverlay>
           {activeId ? (
-            <IssueCard issue={issues.find(i => i.id === activeId)} />
+            <IssueCard issue={issues.find((i) => i.id === activeId)} isDragOverlay />
           ) : null}
         </DragOverlay>
       </DndContext>

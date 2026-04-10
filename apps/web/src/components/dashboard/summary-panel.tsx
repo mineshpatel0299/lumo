@@ -14,10 +14,14 @@ import { Sparkles, Loader2, RefreshCw, BarChart3 } from 'lucide-react'
 import { useAuth } from '@clerk/nextjs'
 import ReactMarkdown from 'react-markdown'
 import { useParams } from 'next/navigation'
+import { API_URL } from '@/lib/api'
 
 export function SummaryPanel() {
   const { getToken } = useAuth()
-  const { workspaceSlug } = useParams()
+  const params = useParams()
+  const workspaceSlug = Array.isArray(params.workspaceSlug)
+    ? params.workspaceSlug[0]
+    : (params.workspaceSlug as string | undefined)
   const [summary, setSummary] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
 
@@ -25,7 +29,7 @@ export function SummaryPanel() {
     setLoading(true)
     try {
       const token = await getToken()
-      const res = await fetch(`http://localhost:3001/ai/workspace-summary/${workspaceSlug}`, {
+      const res = await fetch(API_URL + `/ai/workspace-summary/${workspaceSlug}`, {
         headers: { 'Authorization': `Bearer ${token}` }
       })
       const data = await res.json()

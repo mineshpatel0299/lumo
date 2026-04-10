@@ -13,6 +13,7 @@ import { Search, Sparkles, Loader2, Hash } from 'lucide-react'
 import { useAuth } from '@clerk/nextjs'
 import { useParams, useRouter } from 'next/navigation'
 import { Kbd } from '../ui/kbd'
+import { API_URL } from '@/lib/api'
 
 export function SearchModal() {
   const [open, setOpen] = useState(false)
@@ -21,7 +22,10 @@ export function SearchModal() {
   const [loading, setLoading] = useState(false)
   
   const { getToken } = useAuth()
-  const { workspaceSlug } = useParams()
+  const params = useParams()
+  const workspaceSlug = Array.isArray(params.workspaceSlug)
+    ? params.workspaceSlug[0]
+    : (params.workspaceSlug as string | undefined)
   const router = useRouter()
 
   useEffect(() => {
@@ -45,7 +49,7 @@ export function SearchModal() {
     setLoading(true)
     try {
       const token = await getToken()
-      const res = await fetch('http://localhost:3001/ai/search', {
+      const res = await fetch(API_URL + '/ai/search', {
         method: 'POST',
         headers: { 
           'Content-Type': 'application/json',
